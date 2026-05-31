@@ -106,7 +106,7 @@ class ThaPartialPaymentWizard(models.TransientModel):
         required=True,
         readonly=True,
     )
-    communication = fields.Char(string="Memo / Communication")
+    communication = fields.Char(string="Memo")
     group_payment = fields.Boolean(
         string="Group Payments",
         default=True,
@@ -144,6 +144,22 @@ class ThaPartialPaymentWizard(models.TransientModel):
     available_payment_method_line_ids = fields.Many2many(
         "account.payment.method.line",
         compute="_compute_available_payment_method_line_ids",
+    )
+    available_partner_bank_ids = fields.Many2many(
+        "res.partner.bank",
+        compute="_compute_available_partner_bank_ids",
+    )
+    partner_bank_id = fields.Many2one(
+        "res.partner.bank",
+        string="Recipient Bank Account",
+        domain="[('id', 'in', available_partner_bank_ids)]",
+        check_company=True,
+    )
+    show_partner_bank_account = fields.Boolean(
+        compute="_compute_show_require_partner_bank",
+    )
+    require_partner_bank_account = fields.Boolean(
+        compute="_compute_show_require_partner_bank",
     )
 
     PAYMENT_PROFILE_BY_MOVE_TYPE = {
@@ -184,11 +200,40 @@ class ThaPartialPaymentWizard(models.TransientModel):
             direction = wizard.payment_type or (wizard.line_ids[:1].payment_direction if wizard.line_ids else "inbound")
             wizard.available_payment_method_line_ids = wizard.journal_id._get_available_payment_method_lines(direction)
 
-    @api.onchange("journal_id", "payment_type")
+    @api.depends("journal_id", "payment_type", "partner_id", "company_id")
+    def _compute_available_partner_bank_ids(self):
+        PartnerBank = self.env["res.partner.bank"]
+        for wizard in self:
+            if not wizard.journal_id:
+                wizard.available_partner_bank_ids = PartnerBank
+            elif wizard.payment_type == "inbound":
+                wizard.available_partner_bank_ids = wizard.journal_id.bank_account_id
+            elif wizard.partner_id:
+                wizard.available_partner_bank_ids = wizard.partner_id.bank_ids.filtered(
+                    lambda bank: bank.company_id.id in (False, wizard.company_id.id)
+                )._origin
+            else:
+                wizard.available_partner_bank_ids = PartnerBank
+
+    @api.depends("payment_method_line_id", "journal_id")
+    def _compute_show_require_partner_bank(self):
+        payment_model = self.env["account.payment"]
+        method_codes_using_bank = payment_model._get_method_codes_using_bank_account()
+        method_codes_needing_bank = payment_model._get_method_codes_needing_bank_account()
+        for wizard in self:
+            if wizard.journal_id.type == "cash":
+                wizard.show_partner_bank_account = False
+            else:
+                wizard.show_partner_bank_account = wizard.payment_method_line_id.code in method_codes_using_bank
+            wizard.require_partner_bank_account = wizard.payment_method_line_id.code in method_codes_needing_bank
+
+    @api.onchange("journal_id", "payment_type", "partner_id")
     def _onchange_journal_id(self):
         for wizard in self:
             if wizard.payment_method_line_id not in wizard.available_payment_method_line_ids:
                 wizard.payment_method_line_id = wizard.available_payment_method_line_ids[:1]
+            if wizard.partner_bank_id not in wizard.available_partner_bank_ids:
+                wizard.partner_bank_id = wizard.available_partner_bank_ids[:1]
 
     @api.model
     def _get_payment_profile(self, move):
@@ -242,6 +287,16 @@ class ThaPartialPaymentWizard(models.TransientModel):
         return journals[:1]
 
     @api.model
+    def _get_default_partner_bank(self, journal, payment_type, partner, company):
+        if not journal:
+            return self.env["res.partner.bank"]
+        if payment_type == "inbound":
+            return journal.bank_account_id
+        if partner:
+            return partner.bank_ids.filtered(lambda bank: bank.company_id.id in (False, company.id))[:1]._origin
+        return self.env["res.partner.bank"]
+
+    @api.model
     def default_get(self, fields_list):
         res = super().default_get(fields_list)
         active_ids = self.env.context.get("active_ids") or []
@@ -282,6 +337,7 @@ class ThaPartialPaymentWizard(models.TransientModel):
             "partner_type": partner_type,
             "journal_id": journal.id,
             "payment_method_line_id": payment_method.id,
+            "partner_bank_id": self._get_default_partner_bank(journal, payment_type, common_partner, company).id,
             "payment_date": fields.Date.context_today(self),
             "communication": ", ".join(label for label in labels if label),
             "group_payment": True,
@@ -311,6 +367,12 @@ class ThaPartialPaymentWizard(models.TransientModel):
 
         if self.payment_method_line_id.journal_id and self.payment_method_line_id.journal_id != self.journal_id:
             raise UserError(_("The selected payment method is not valid for the selected journal."))
+
+        if self.require_partner_bank_account and not self.partner_bank_id:
+            raise UserError(_("Recipient Bank Account is required for the selected payment method."))
+
+        if self.partner_bank_id and self.partner_bank_id not in self.available_partner_bank_ids:
+            raise UserError(_("The selected Recipient Bank Account is not valid for this payment."))
 
         for direction in set(self._positive_lines().mapped("payment_direction")):
             if not self.journal_id._get_available_payment_method_lines(direction):
@@ -367,11 +429,22 @@ class ThaPartialPaymentWizard(models.TransientModel):
             raise UserError(_("No liquidity account could be found on the selected journal or payment method."))
         return account
 
+    def _get_partner_bank(self, move):
+        self.ensure_one()
+        if self.partner_bank_id:
+            return self.partner_bank_id
+        payment_direction, _partner_type = self._get_payment_profile(move)
+        if payment_direction == "inbound":
+            return self.journal_id.bank_account_id
+        return move.partner_id.bank_ids.filtered(
+            lambda bank: bank.company_id.id in (False, move.company_id.id)
+        )[:1]._origin
+
     def _payment_vals(self, amount, line, payment_method_line):
         self.ensure_one()
         move = line.move_id
         payment_direction, partner_type = self._get_payment_profile(move)
-        return {
+        vals = {
             "date": self.payment_date,
             "amount": amount,
             "payment_type": payment_direction,
@@ -385,6 +458,10 @@ class ThaPartialPaymentWizard(models.TransientModel):
             "destination_account_id": self._get_destination_account(move).id,
             "write_off_line_vals": [],
         }
+        partner_bank = self._get_partner_bank(move)
+        if partner_bank:
+            vals["partner_bank_id"] = partner_bank.id
+        return vals
 
     def _get_counterpart_split_vals(self, payment, lines, balance_total):
         self.ensure_one()
