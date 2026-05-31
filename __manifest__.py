@@ -1,5 +1,5 @@
 {
-    "name": "THA Partial Payment",
+    "name": "Partial Payment",
     "summary": "Group partial payment wizard for customer invoices and vendor bills",
     "version": "19.0.1.0.0",
     "category": "Accounting",

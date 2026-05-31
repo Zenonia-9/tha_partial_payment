@@ -4,7 +4,7 @@ from odoo.exceptions import UserError
 
 class ThaPartialPaymentWizardLine(models.TransientModel):
     _name = "tha.partial.payment.wizard.line"
-    _description = "THA Partial Payment Wizard Line"
+    _description = "Partial Payment Wizard Line"
     _order = "invoice_date_due, move_id"
 
     wizard_id = fields.Many2one(
