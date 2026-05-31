@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_invoice_tree_tha_partial_payment" model="ir.ui.view">
+        <field name="name">account.invoice.list.tha.partial.payment</field>
+        <field name="model">account.move</field>
+        <field name="inherit_id" ref="account.view_invoice_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header/button[@name='action_force_register_payment']" position="after">
+                <button name="action_open_group_partial_payment_wizard"
+                        type="object"
+                        string="Partially Pay"
+                        groups="account.group_account_invoice"
+                        invisible="context.get('default_move_type') not in ('out_invoice', 'out_refund', 'in_invoice', 'in_refund')"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

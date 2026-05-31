@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_tha_partial_payment_wizard_form" model="ir.ui.view">
+        <field name="name">tha.partial.payment.wizard.form</field>
+        <field name="model">tha.partial.payment.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Group Partial Payment">
+                <field name="available_journal_ids" invisible="1"/>
+                <field name="available_payment_method_line_ids" invisible="1"/>
+                <field name="payment_type" invisible="1"/>
+                <field name="partner_type" invisible="1"/>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="journal_id" options="{'no_create': True, 'no_open': True}"/>
+                            <field name="payment_method_line_id"
+                                   context="{'hide_payment_journal_id': 1}"
+                                   options="{'no_create': True, 'no_open': True}"/>
+                            <field name="payment_date"/>
+                            <field name="group_payment"/>
+                        </group>
+                        <group>
+                            <field name="partner_id"/>
+                            <field name="currency_id" groups="base.group_multi_currency"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                            <field name="communication"/>
+                        </group>
+                    </group>
+                    <field name="line_ids" nolabel="1">
+                        <list editable="bottom" create="false" delete="false">
+                            <field name="move_id" string="Document"/>
+                            <field name="partner_id"/>
+                            <field name="invoice_date" optional="hide"/>
+                            <field name="invoice_date_due"/>
+                            <field name="currency_id" column_invisible="True"/>
+                            <field name="company_currency_id" column_invisible="True"/>
+                            <field name="move_type" column_invisible="True"/>
+                            <field name="partner_type" column_invisible="True"/>
+                            <field name="payment_direction" column_invisible="True"/>
+                            <field name="amount_total" optional="hide"/>
+                            <field name="amount_residual" string="Due Amount"/>
+                            <field name="applied_amount"/>
+                        </list>
+                    </field>
+                    <group class="oe_subtotal_footer oe_right">
+                        <field name="amount_total_applied" readonly="1"/>
+                    </group>
+                </sheet>
+                <footer>
+                    <button name="action_create_payments"
+                            type="object"
+                            string="Create Payment"
+                            class="oe_highlight"
+                            data-hotkey="q"/>
+                    <button string="Cancel"
+                            special="cancel"
+                            class="btn-secondary"
+                            data-hotkey="x"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>
