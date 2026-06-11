@@ -23,6 +23,11 @@ class ThaPartialPaymentWizardLine(models.TransientModel):
         string="Partner",
         readonly=True,
     )
+    vendor_ref = fields.Text(
+        string="Vendor Reference",
+        readonly=True,
+        compute="_compute_vendor_ref",
+    )
     move_type = fields.Selection(
         related="move_id.move_type",
         string="Move Type",
@@ -65,6 +70,11 @@ class ThaPartialPaymentWizardLine(models.TransientModel):
         ],
         readonly=True,
     )
+
+    @api.depends("move_id")
+    def _compute_vendor_ref(self):
+        for line in self:
+            line.vendor_ref = line.move_id.vendor_ref if "vendor_ref" in line.move_id._fields else False
 
 
 class ThaPartialPaymentWizard(models.TransientModel):
