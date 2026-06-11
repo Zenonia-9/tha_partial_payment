@@ -59,6 +59,7 @@ class ThaPartialPaymentWizardLine(models.TransientModel):
         readonly=True,
         currency_field="currency_id",
     )
+    communication = fields.Char(string="Line Memo")
     applied_amount = fields.Monetary(
         string="Applied",
         currency_field="currency_id",
@@ -265,6 +266,10 @@ class ThaPartialPaymentWizard(models.TransientModel):
         )
 
     @api.model
+    def _get_default_move_memo(self, move):
+        return move.payment_reference or move.ref or move.name
+
+    @api.model
     def _prepare_line_command(self, move):
         payment_direction, _partner_type = self._get_payment_profile(move)
         return Command.create({
@@ -277,6 +282,7 @@ class ThaPartialPaymentWizard(models.TransientModel):
             "company_currency_id": move.company_currency_id.id,
             "amount_total": abs(move.amount_total),
             "amount_residual": abs(move.amount_residual),
+            "communication": self._get_default_move_memo(move),
             "applied_amount": abs(move.amount_residual),
             "payment_direction": payment_direction,
         })
@@ -338,7 +344,7 @@ class ThaPartialPaymentWizard(models.TransientModel):
         common_partner = self._get_common_record(moves.partner_id)
         common_currency = self._get_common_record(moves.currency_id) or company.currency_id
 
-        labels = [move.payment_reference or move.ref or move.name for move in moves]
+        labels = [self._get_default_move_memo(move) for move in moves]
         res.update({
             "company_id": company.id,
             "partner_id": common_partner.id if common_partner else False,
@@ -450,6 +456,12 @@ class ThaPartialPaymentWizard(models.TransientModel):
             lambda bank: bank.company_id.id in (False, move.company_id.id)
         )[:1]._origin
 
+    def _get_payment_memo(self, line):
+        self.ensure_one()
+        if self.group_payment:
+            return self.communication or self._get_default_move_memo(line.move_id)
+        return line.communication or self.communication or self._get_default_move_memo(line.move_id)
+
     def _payment_vals(self, amount, line, payment_method_line):
         self.ensure_one()
         move = line.move_id
@@ -459,7 +471,7 @@ class ThaPartialPaymentWizard(models.TransientModel):
             "amount": amount,
             "payment_type": payment_direction,
             "partner_type": partner_type,
-            "memo": self.communication or move.payment_reference or move.ref or move.name,
+            "memo": self._get_payment_memo(line),
             "journal_id": self.journal_id.id,
             "company_id": move.company_id.id,
             "currency_id": move.currency_id.id,

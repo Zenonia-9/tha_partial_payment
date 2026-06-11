@@ -30,7 +30,9 @@
                             <field name="partner_id"/>
                             <field name="currency_id" groups="base.group_multi_currency"/>
                             <field name="company_id" groups="base.group_multi_company"/>
-                            <field name="communication"/>
+                            <field name="communication"
+                                   invisible="not group_payment"
+                                   placeholder="Memo for the grouped payment"/>
                         </group>
                     </group>
                     <field name="line_ids" nolabel="1">
@@ -38,6 +40,11 @@
                             <field name="move_id" string="Document" force_save="1"/>
                             <field name="partner_id" force_save="1"/>
                             <field name="vendor_ref" force_save="1"/>
+                            <field name="communication"
+                                   string="Line Memo"
+                                   optional="show"
+                                   force_save="1"
+                                   column_invisible="parent.group_payment"/>
                             <field name="invoice_date" optional="hide" force_save="1"/>
                             <field name="invoice_date_due" force_save="1"/>
                             <field name="currency_id" column_invisible="True" force_save="1"/>
