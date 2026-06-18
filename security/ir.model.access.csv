@@ -1,3 +1,5 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_tha_partial_payment_wizard,tha.partial.payment.wizard,model_tha_partial_payment_wizard,account.group_account_invoice,1,1,1,1
 access_tha_partial_payment_wizard_line,tha.partial.payment.wizard.line,model_tha_partial_payment_wizard_line,account.group_account_invoice,1,1,1,1
+access_tha_partial_payment_overpayment_confirmation,tha.partial.payment.overpayment.confirmation,model_tha_partial_payment_overpayment_confirmation,account.group_account_invoice,1,1,1,1
+access_tha_partial_payment_overpayment_confirmation_line,tha.partial.payment.overpayment.confirmation.line,model_tha_partial_payment_overpayment_confirmation_line,account.group_account_invoice,1,1,1,1

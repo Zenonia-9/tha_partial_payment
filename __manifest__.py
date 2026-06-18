@@ -11,6 +11,7 @@
     "data": [
         "security/ir.model.access.csv",
         "views/partial_payment_wizard_views.xml",
+        "views/partial_payment_overpayment_confirmation_views.xml",
         "views/account_move_views.xml",
     ],
     "installable": True,

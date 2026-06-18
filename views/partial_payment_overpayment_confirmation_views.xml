@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_tha_partial_payment_overpayment_confirmation_form" model="ir.ui.view">
+        <field name="name">tha.partial.payment.overpayment.confirmation.form</field>
+        <field name="model">tha.partial.payment.overpayment.confirmation</field>
+        <field name="arch" type="xml">
+            <form string="Confirm Overpayment">
+                <sheet>
+                    <div class="alert alert-warning" role="alert">
+                        The applied amount exceeds the due amount for the documents below. The due amount will be reconciled and the excess will remain as an open partner credit or debit.
+                    </div>
+                    <field name="wizard_id" invisible="1"/>
+                    <field name="currency_id" invisible="1"/>
+                    <field name="line_ids" nolabel="1" readonly="1">
+                        <list create="0" delete="0" edit="0">
+                            <field name="move_id" string="Document"/>
+                            <field name="currency_id" column_invisible="True"/>
+                            <field name="amount_residual"/>
+                            <field name="applied_amount"/>
+                            <field name="excess_amount"/>
+                        </list>
+                    </field>
+                </sheet>
+                <footer>
+                    <button name="action_confirm"
+                            type="object"
+                            string="Confirm"
+                            class="oe_highlight"
+                            data-hotkey="q"/>
+                    <button string="Cancel"
+                            special="cancel"
+                            class="btn-secondary"
+                            data-hotkey="x"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

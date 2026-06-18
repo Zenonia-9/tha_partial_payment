@@ -365,13 +365,17 @@ class ThaPartialPaymentWizard(models.TransientModel):
         self.ensure_one()
         return self.line_ids.filtered(lambda line: line.currency_id.compare_amounts(line.applied_amount, 0.0) > 0)
 
+    def _get_overpayment_lines(self):
+        self.ensure_one()
+        return self.line_ids.filtered(
+            lambda line: line.currency_id.compare_amounts(line.applied_amount, line.amount_residual) > 0
+        )
+
     def _validate_amounts(self):
         self.ensure_one()
         for line in self.line_ids:
             if line.currency_id.compare_amounts(line.applied_amount, 0.0) < 0:
                 raise UserError(_("Applied amount cannot be negative for %s.") % line.move_id.display_name)
-            if line.currency_id.compare_amounts(line.applied_amount, line.amount_residual) > 0:
-                raise UserError(_("Applied amount cannot be greater than the due amount for %s.") % line.move_id.display_name)
 
         if not self._positive_lines():
             raise UserError(_("At least one document must have an applied amount greater than zero."))
@@ -621,15 +625,45 @@ class ThaPartialPaymentWizard(models.TransientModel):
             payments |= payment
         return payments
 
+    def _action_open_overpayment_confirmation(self, overpayment_lines):
+        self.ensure_one()
+        return {
+            "name": _("Confirm Overpayment"),
+            "type": "ir.actions.act_window",
+            "res_model": "tha.partial.payment.overpayment.confirmation",
+            "view_mode": "form",
+            "target": "new",
+            "context": {
+                "default_wizard_id": self.id,
+                "default_line_ids": [
+                    Command.create({
+                        "wizard_line_id": line.id,
+                        "move_id": line.move_id.id,
+                        "currency_id": line.currency_id.id,
+                        "amount_residual": line.amount_residual,
+                        "applied_amount": line.applied_amount,
+                        "excess_amount": line.applied_amount - line.amount_residual,
+                    })
+                    for line in overpayment_lines
+                ],
+            },
+        }
+
     def action_create_payments(self):
         self.ensure_one()
         self.line_ids.move_id._tha_validate_partial_payment_moves()
         self._validate_amounts()
         self._validate_journal_and_method()
         positive_lines = self._positive_lines()
-
         if self.group_payment:
             self._validate_group_payment()
+        overpayment_lines = positive_lines.filtered(
+            lambda line: line.currency_id.compare_amounts(line.applied_amount, line.amount_residual) > 0
+        )
+        if overpayment_lines and not self.env.context.get("skip_overpayment_warning"):
+            return self._action_open_overpayment_confirmation(overpayment_lines)
+
+        if self.group_payment:
             payments = self._create_group_payment(positive_lines)
         else:
             payments = self._create_separate_payments(positive_lines)
@@ -651,3 +685,72 @@ class ThaPartialPaymentWizard(models.TransientModel):
                 "domain": [("id", "in", payments.ids)],
             })
         return action
+
+
+class ThaPartialPaymentOverpaymentConfirmation(models.TransientModel):
+    _name = "tha.partial.payment.overpayment.confirmation"
+    _description = "Partial Payment Overpayment Confirmation"
+
+    wizard_id = fields.Many2one(
+        "tha.partial.payment.wizard",
+        required=True,
+        readonly=True,
+        ondelete="cascade",
+    )
+    line_ids = fields.One2many(
+        "tha.partial.payment.overpayment.confirmation.line",
+        "confirmation_id",
+        string="Overpaid Documents",
+        readonly=True,
+    )
+    currency_id = fields.Many2one(
+        related="wizard_id.currency_id",
+        readonly=True,
+    )
+
+    def action_confirm(self):
+        self.ensure_one()
+        return self.wizard_id.with_context(skip_overpayment_warning=True).action_create_payments()
+
+
+class ThaPartialPaymentOverpaymentConfirmationLine(models.TransientModel):
+    _name = "tha.partial.payment.overpayment.confirmation.line"
+    _description = "Partial Payment Overpayment Confirmation Line"
+    _order = "move_id"
+
+    confirmation_id = fields.Many2one(
+        "tha.partial.payment.overpayment.confirmation",
+        required=True,
+        readonly=True,
+        ondelete="cascade",
+    )
+    wizard_line_id = fields.Many2one(
+        "tha.partial.payment.wizard.line",
+        readonly=True,
+    )
+    move_id = fields.Many2one(
+        "account.move",
+        string="Document",
+        required=True,
+        readonly=True,
+    )
+    currency_id = fields.Many2one(
+        "res.currency",
+        required=True,
+        readonly=True,
+    )
+    amount_residual = fields.Monetary(
+        string="Due Amount",
+        currency_field="currency_id",
+        readonly=True,
+    )
+    applied_amount = fields.Monetary(
+        string="Applied Amount",
+        currency_field="currency_id",
+        readonly=True,
+    )
+    excess_amount = fields.Monetary(
+        string="Excess Amount",
+        currency_field="currency_id",
+        readonly=True,
+    )
